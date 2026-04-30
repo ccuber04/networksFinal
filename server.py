@@ -110,7 +110,6 @@ async def handler(ws):
         print("Client disconnected")
 
 async def main():
-    async with serve(handler, '0.0.0.0', 8080) as server:
         print("Server started on localhost:8080")
         await game_loop()
         # await server.serve_forever()
