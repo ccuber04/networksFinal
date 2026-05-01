@@ -29,7 +29,11 @@ async def game_loop():
             # handle collisions
             hit_wall = new_head[0] >= rows or new_head[0] < 0 or new_head[1] >= rows or new_head[1] < 0
             hit_self = new_head in snake
-            hit_snake = new_head in [snakes["snake"] for _, snakes in players.items()]
+            hit_snake = any(
+                new_head in other_player["snake"]
+                for id, other_player in players.items()
+                if id != player_id
+            )
 
             if hit_wall or hit_self or hit_snake:
                 reset_player(player)
@@ -57,8 +61,21 @@ async def game_loop():
         }
 
         # send state to all clients
-        for ws in socket_to_id.keys():
-            await ws.send(json.dumps(state))
+        for ws in list(socket_to_id.keys()):
+            try:
+                await ws.send(json.dumps(state))
+            except Exception as e:
+                print(f"Removing disconnected client: {e}")
+
+                # send likely fail because player no longer exists
+                # remove the player from players and socket_to_id
+                player_id = socket_to_id[ws]
+                if player_id is not None:
+                    players.pop(player_id)
+                socket_to_id.pop(ws, None)
+
+        # player could be removed so update number of snacks
+        sync_total_snacks()
 
         await asyncio.sleep(0.1)
 
@@ -66,8 +83,9 @@ async def handler(ws):
     global next_id
     print("Connected", ws)
     player_data = {
-        "snake": [[10, 10]],
-        "direction": [0, 1]
+        "snake": [random_spawn_location()],
+        "direction": random_direction(),
+        "color": random_color()
     }
 
     players[next_id] = player_data
@@ -97,7 +115,6 @@ async def handler(ws):
 
                 if current_dx + new_dx != 0 and current_dy + new_dy != 0:
                     player["direction"] = data["direction"]
-                    print(f"Player {player_id} redirected: {players[player_id]}")
 
     finally:
         player_id = socket_to_id[ws]
@@ -110,9 +127,10 @@ async def handler(ws):
         print("Client disconnected")
 
 async def main():
-        print("Server started on localhost:8080")
-        await game_loop()
-        # await server.serve_forever()
+    async with serve(handler, '0.0.0.0', 8080):
+        print("Server started on 0.0.0.0:8080")
+        game_task = asyncio.create_task(game_loop())
+        await asyncio.Future()
 
 #### Helpers ####
 def random_snack_position():
@@ -130,6 +148,33 @@ def random_snack_position():
         if not food_on_snake and new_snack not in snacks:
             return new_snack
 
+def random_spawn_location():
+    while True:
+        x = random.randrange(1, rows - 1)
+        y = random.randrange(1, rows - 1)
+        spawn = [x, y]
+
+        on_snake = any(
+            spawn in player["snake"]
+            for player in players.values()
+        )
+        on_snack = spawn in snacks
+
+        if not on_snake and not on_snack:
+            return spawn
+
+def random_color():
+    return [
+        random.randrange(50, 255),
+        random.randrange(50, 255),
+        random.randrange(50, 255)
+    ]
+
+def random_direction():
+    return random.choice([
+        [1, 0], [-1, 0], [0, 1], [0, -1]
+    ])
+
 def sync_total_snacks():
     while len(snacks) < len(players):
         snacks.append(random_snack_position())
@@ -138,8 +183,10 @@ def sync_total_snacks():
         snacks.pop()
 
 def reset_player(player):
-    player["snake"] = [[10, 10]]
-    player["direction"] = [0, 1]
+    old_snake = player["snake"]
+    player["snake"] = []
+    player["snake"] = [random_spawn_location()]
+    player["direction"] = random_direction()
 
 if __name__ == "__main__":
     asyncio.run(main())

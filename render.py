@@ -34,8 +34,10 @@ def redrawWindow(width, rows, win, server_players, server_snacks):
     drawGrid(width, rows, win)
     for player in server_players.values():
         snake = [tuple(pos) for pos in player["snake"]]
+        color = tuple(player.get("color", [255, 0, 0]))
+
         for i, pos in enumerate(snake):
-            c = cube(pos)
+            c = cube(pos, color=color)
             if i == 0:
                 c.draw(win, True)
             else:
