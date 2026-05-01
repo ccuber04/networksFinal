@@ -1,6 +1,7 @@
 import pygame
 
 class cube():
+    """Provided by techwithtim"""
     rows = 20
     w = 500
 
@@ -30,6 +31,8 @@ class cube():
             pygame.draw.circle(surface, (0, 0, 0), circleMiddle2, radius)
 
 def redrawWindow(width, rows, win, server_players, server_snacks):
+    """Provided by techwithtim
+    addition of all players and snacks being redrawn"""
     win.fill((0,0,0))
     drawGrid(width, rows, win)
     for player in server_players.values():
@@ -50,6 +53,7 @@ def redrawWindow(width, rows, win, server_players, server_snacks):
     pygame.display.update()
 
 def drawGrid(w, rows, surface):
+    """Provided by techwithtim"""
     sizeBtwn = w // rows
 
     x = 0

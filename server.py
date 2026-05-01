@@ -13,10 +13,11 @@ rows = 20
 next_id = 0
 
 async def game_loop():
+    """Main game loop to process players input, updating the snake, updating snacks, and sending game state to
+    all clients"""
     global food
     while True:
-        # apply player input
-        # update all snakes
+        # apply player input and update all snakes
         for player_id, player in players.items():
             snake = player["snake"]
             direction = player["direction"]
@@ -35,11 +36,8 @@ async def game_loop():
                 if id != player_id
             )
 
+            # current player collides with the wall, itself, or other players then reset
             if hit_wall or hit_self or hit_snake:
-                reset_player(player)
-                continue
-
-            if new_head in snake:
                 reset_player(player)
                 continue
 
@@ -48,9 +46,11 @@ async def game_loop():
 
             # handle food
             if new_head in snacks:
+                # extend the snake and don't pop the tail
                 snack_index = snacks.index(new_head)
                 snacks[snack_index] = random_snack_position()
             else:
+                # keep the snake at the same size
                 snake.pop()
 
         # build game state
@@ -77,11 +77,15 @@ async def game_loop():
         # player could be removed so update number of snacks
         sync_total_snacks()
 
+        # sleep to allow handler to recv data
         await asyncio.sleep(0.1)
 
 async def handler(ws):
+    """Handles websocket connections and use JSON for data transfer"""
     global next_id
     print("Connected", ws)
+
+    # initialize player with random spawn, direction, and color
     player_data = {
         "snake": [random_spawn_location()],
         "direction": random_direction(),
@@ -95,6 +99,7 @@ async def handler(ws):
     # sync number of snacks to the number of players
     sync_total_snacks()
 
+    # sending initial game state and what id the client has
     sending_data = {
         "type": "init",
         "player_id": socket_to_id[ws],
@@ -106,6 +111,8 @@ async def handler(ws):
     try:
         async for message in ws:
             data = json.loads(message)
+
+            # player changing direction at a keypress
             if data["type"] == "input":
                 player_id = socket_to_id[ws]
                 player = players[player_id]
@@ -113,10 +120,12 @@ async def handler(ws):
                 current_dx, current_dy = player["direction"]
                 new_dx, new_dy = data["direction"]
 
+                # do not allow reverse directions (left -> right or up -> down)
                 if current_dx + new_dx != 0 and current_dy + new_dy != 0:
                     player["direction"] = data["direction"]
 
     finally:
+        # connection is closed
         player_id = socket_to_id[ws]
         del players[player_id]
         del socket_to_id[ws]
@@ -126,7 +135,8 @@ async def handler(ws):
 
         print("Client disconnected")
 
-async def main():
+async def server():
+    """Server connection and game loop starter"""
     async with serve(handler, '0.0.0.0', 8080):
         print("Server started on 0.0.0.0:8080")
         game_task = asyncio.create_task(game_loop())
@@ -134,6 +144,7 @@ async def main():
 
 #### Helpers ####
 def random_snack_position():
+    """Randomly generates a snack position"""
     while True:
         x = random.randrange(1, rows - 1)
         y = random.randrange(1, rows - 1)
@@ -149,6 +160,7 @@ def random_snack_position():
             return new_snack
 
 def random_spawn_location():
+    """Randomly generates a spawn location"""
     while True:
         x = random.randrange(1, rows - 1)
         y = random.randrange(1, rows - 1)
@@ -164,6 +176,7 @@ def random_spawn_location():
             return spawn
 
 def random_color():
+    """Randomly generates the players color"""
     return [
         random.randrange(50, 255),
         random.randrange(50, 255),
@@ -171,22 +184,26 @@ def random_color():
     ]
 
 def random_direction():
+    """Randomly selects initial and reset direction of player"""
     return random.choice([
         [1, 0], [-1, 0], [0, 1], [0, -1]
     ])
 
 def sync_total_snacks():
+    """Synchronize and update snack positions based on number of players"""
+    # add more snacks if there are more players than snacks
     while len(snacks) < len(players):
         snacks.append(random_snack_position())
 
+    # remove snacks if there are more snacks than players
     while len(snacks) > len(players):
         snacks.pop()
 
 def reset_player(player):
-    old_snake = player["snake"]
+    """Reset player after death to new spawn location and random direction"""
     player["snake"] = []
     player["snake"] = [random_spawn_location()]
     player["direction"] = random_direction()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(server())

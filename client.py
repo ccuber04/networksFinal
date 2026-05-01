@@ -15,6 +15,7 @@ width = 500
 rows = 20
 
 async def client_loop():
+    """Sets up connections and starts game_loop and receive_loop"""
     async with connect("ws://192.168.0.21:8080") as ws:
         print("Connected to server")
 
@@ -26,21 +27,26 @@ async def client_loop():
 
 
 async def receive_loop(ws):
+    """Websocket recv message loop to initialize data and update states"""
     global server_players, server_snacks, my_player_id
     while True:
         msg = await ws.recv()
         data = json.loads(msg)
 
+        # initialize all players and identify which player the client is
         if data["type"] == "init":
             my_player_id = data["player_id"]
             server_players = data["players"]
             print(f"player id: {my_player_id}")
+
+        # recv and updated game state of players and snacks
         elif data["type"] == "state":
             server_players = data["players"]
             server_snacks = [tuple(pos) for pos in data["snacks"]]
 
 
 async def game_loop(ws):
+    """Client's game loop for reading keypresses to send to server and render the game"""
     pygame.init()
     win = pygame.display.set_mode((width, width))
     pygame.display.set_caption("Multiplayer Snake!")
@@ -70,7 +76,9 @@ async def game_loop(ws):
 
     pygame.quit()
 
+#### Helpers ####
 async def send_input(ws, direction):
+    """Send redirection as JSON to server"""
     msg = {
         "type": "input",
         "direction": direction
